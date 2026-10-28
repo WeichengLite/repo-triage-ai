@@ -29,6 +29,14 @@ def test_invalid_repository(repository: str) -> None:
         validate_repository(repository)
 
 
+@pytest.mark.parametrize("repository", [
+    "pallets/flask", "python/cpython", "owner-name/repo_name.v2",
+])
+def test_valid_repository(repository: str) -> None:
+    """Accept valid identifiers without changing their case or spelling."""
+    assert validate_repository(repository) == repository
+
+
 @pytest.mark.parametrize("limit", [0, 31, -1, True, 1.5, "15"])
 def test_invalid_limit(limit: object) -> None:
     with patch("repo_triage.github_client.requests.get") as get:

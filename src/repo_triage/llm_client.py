@@ -138,7 +138,7 @@ class LiteLLMProvider:
                 raise TriageError("Triage input exceeds the token budget.")
             response = litellm.completion(
                 model=self.model, messages=messages,
-                timeout=LLM_TIMEOUT_SECONDS, num_retries=0,
+                timeout=LLM_TIMEOUT_SECONDS, num_retries=0, max_retries=0,
                 **options,
             )
             choice = response.choices[0]

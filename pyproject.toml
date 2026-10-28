@@ -7,7 +7,9 @@ name = "repo-triage-ai"
 version = "0.1.0"
 description = "A Monday morning briefing for public GitHub maintainers."
 requires-python = ">=3.10"
-dependencies = ["requests>=2.31", "pydantic>=2,<3", "litellm", "rich"]
+dependencies = [
+    "requests>=2.31", "pydantic>=2,<3", "litellm", "rich", "python-dotenv"
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]

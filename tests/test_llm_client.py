@@ -13,6 +13,7 @@ from repo_triage.llm_client import (
     TriageClient,
     TriageError,
     _response_schema,
+    rank_triage,
 )
 from repo_triage.models import Issue
 
@@ -107,6 +108,40 @@ def test_provider_error_is_not_retried() -> None:
     provider.complete.assert_called_once()
 
 
+def test_ranking_is_independent_of_input_order() -> None:
+    """Urgency wins over engagement, with stable label and number tie-breaks."""
+    from repo_triage.models import IssueTriage
+
+    sources = [
+        issue(1, comment_count=999), issue(2), issue(3, labels=["P1"]), issue(4),
+    ]
+    results = [IssueTriage.model_validate(result(number, urgency))
+               for number, urgency in [(4, "high"), (3, "high"),
+                                       (2, "high"), (1, "low")]]
+    forward = rank_triage(results, sources)
+    backward = rank_triage(list(reversed(results)), list(reversed(sources)))
+    assert [item.issue_number for item in forward] == [3, 2, 4, 1]
+    assert forward == backward
+
+
+def test_invalid_output_has_at_most_two_sdk_invocations() -> None:
+    """Bound the real provider path, not only a mocked provider interface."""
+    reply = Mock()
+    reply.choices = [Mock(finish_reason="stop", message=Mock(content="invalid"))]
+    with (
+        patch("litellm.get_supported_openai_params", return_value=["max_tokens"]),
+        patch("litellm.supports_response_schema", return_value=False),
+        patch("litellm.token_counter", return_value=10),
+        patch("litellm.completion", return_value=reply) as complete,
+    ):
+        with pytest.raises(TriageError, match="after two attempts"):
+            TriageClient(LiteLLMProvider("test/model")).triage([issue(1)])
+    assert complete.call_count == 2
+    assert all(call.kwargs["num_retries"] == 0
+               and call.kwargs["max_retries"] == 0
+               for call in complete.call_args_list)
+
+
 @pytest.mark.parametrize("schema_support,json_support,expected", [
     (True, True, "json_schema"),
     (False, True, "json_object"),
@@ -129,6 +164,7 @@ def test_provider_capabilities_and_bounds(
     options = complete.call_args.kwargs
     assert options["timeout"] == 20
     assert options["num_retries"] == 0
+    assert options["max_retries"] == 0
     assert options["max_tokens"] == 4096
     assert options.get("response_format", {}).get("type") == expected
 
