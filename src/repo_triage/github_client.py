@@ -1,10 +1,11 @@
 """Fetch a bounded set of open issues from the public GitHub API."""
 
 import re
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Literal
 
-from pydantic import ValidationError
 import requests
+from pydantic import ValidationError
 
 from repo_triage.models import Issue
 
@@ -46,6 +47,7 @@ class GitHubClient:
 
     def __init__(self, token: str | None = None) -> None:
         """Initialize the client with an optional GitHub token."""
+        self.limit_reason: Literal["issue_limit", "page_limit"] | None = None
         self._headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
@@ -54,33 +56,39 @@ class GitHubClient:
             self._headers["Authorization"] = f"Bearer {token}"
 
     def fetch_open_issues(
-        self, repository: str, limit: int = 15
+        self, repository: str, limit: int = 15, since: datetime | None = None
     ) -> list[Issue]:
         """Fetch recent issues, excluding pull requests, from at most two pages.
 
         Args:
             repository: A public GitHub owner/repo identifier.
             limit: Maximum actual issues to return, between 1 and 30.
+            since: Optional timezone-aware exclusive update cutoff.
 
         Returns:
             Issues in descending update order. May contain fewer than limit
             when the repository or two-page budget is exhausted.
 
         Raises:
-            ValueError: If the repository or limit is invalid.
+            ValueError: If the repository, limit, or cutoff is invalid.
             GitHubError: If GitHub is unavailable or returns invalid data.
         """
         repository = validate_repository(repository)
+        self.limit_reason = None
         if (
             isinstance(limit, bool)
             or not isinstance(limit, int)
             or not 1 <= limit <= 30
         ):
             raise ValueError("Issue limit must be an integer between 1 and 30.")
+        if since is not None:
+            if since.utcoffset() is None:
+                raise ValueError("The update cutoff must include a timezone.")
+            since = since.astimezone(timezone.utc)
         issues: list[Issue] = []
         seen: set[int] = set()
         for page in range(1, 3):
-            rows = self._fetch_page(repository, page)
+            rows = self._fetch_page(repository, page, since)
             try:
                 for row in rows:
                     if "pull_request" in row:
@@ -94,10 +102,18 @@ class GitHubClient:
                         updated_at=row["updated_at"],
                         html_url=row["html_url"],
                     )
+                    if issue.updated_at.utcoffset() is None:
+                        raise GitHubError(
+                            "GitHub returned a timestamp without a timezone."
+                        )
+                    issue.updated_at = issue.updated_at.astimezone(timezone.utc)
+                    if since is not None and issue.updated_at <= since:
+                        continue
                     if issue.number not in seen:
                         issues.append(issue)
                         seen.add(issue.number)
                     if len(issues) == limit:
+                        self.limit_reason = "issue_limit"
                         return issues
             except (KeyError, TypeError, ValidationError):
                 raise GitHubError(
@@ -105,18 +121,28 @@ class GitHubClient:
                 ) from None
             if len(rows) < 100:
                 break
+            if page == 2:
+                self.limit_reason = "page_limit"
         return issues
 
-    def _fetch_page(self, repository: str, page: int) -> list[dict[str, Any]]:
+    def _fetch_page(
+        self, repository: str, page: int, since: datetime | None = None
+    ) -> list[dict[str, Any]]:
         """Fetch one fixed-size page and translate failures to safe errors."""
+        params: dict[str, str | int] = {
+            "state": "open",
+            "sort": "updated",
+            "direction": "desc",
+            "per_page": 100,
+            "page": page,
+        }
+        if since is not None:
+            params["since"] = since.strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
             response = requests.get(
                 f"https://api.github.com/repos/{repository}/issues",
                 headers=self._headers,
-                params={
-                    "state": "open", "sort": "updated", "direction": "desc",
-                    "per_page": 100, "page": page,
-                },
+                params=params,
                 timeout=10,
                 allow_redirects=False,
             )

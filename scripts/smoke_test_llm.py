@@ -1,15 +1,15 @@
 """Run one live two-issue smoke test using exported provider credentials."""
 
 import contextlib
-from datetime import datetime, timezone
 import io
 import json
 import logging
 import os
-from pathlib import Path
 import re
 import sys
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import patch
 
 
@@ -29,9 +29,11 @@ def main() -> int:
     try:
         # SDK diagnostics can include request data: never forward them.
         logging.disable(logging.CRITICAL)
-        with contextlib.redirect_stdout(io.StringIO()), \
-                contextlib.redirect_stderr(io.StringIO()):
-            # python-dotenv is already installed as a LiteLLM dependency.
+        with (
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            # Load local configuration before importing provider code.
             from dotenv import load_dotenv
 
             diagnostics["dotenv_loaded"] = load_dotenv(
@@ -69,20 +71,30 @@ def main() -> int:
             issues = [
                 Issue(
                     number=101,
-                    title=("Application crashes when loading configuration "
-                           "after latest release"),
-                    body=("Multiple users report the application crashes "
-                          "immediately after upgrading. This blocks "
-                          "application startup."),
-                    labels=["bug"], comment_count=12, updated_at=now,
+                    title=(
+                        "Application crashes when loading configuration "
+                        "after latest release"
+                    ),
+                    body=(
+                        "Multiple users report the application crashes "
+                        "immediately after upgrading. This blocks "
+                        "application startup."
+                    ),
+                    labels=["bug"],
+                    comment_count=12,
+                    updated_at=now,
                     html_url="https://github.com/example/synthetic/issues/101",
                 ),
                 Issue(
                     number=102,
                     title="Request to change documentation heading color",
-                    body=("A suggestion to improve the appearance of a "
-                          "documentation page. No functional issue."),
-                    labels=["enhancement"], comment_count=0, updated_at=now,
+                    body=(
+                        "A suggestion to improve the appearance of a "
+                        "documentation page. No functional issue."
+                    ),
+                    labels=["enhancement"],
+                    comment_count=0,
+                    updated_at=now,
                     html_url="https://github.com/example/synthetic/issues/102",
                 ),
             ]
@@ -98,34 +110,58 @@ def main() -> int:
             ]
             numbers = [item.issue_number for item in validated]
             if sorted(numbers) != [101, 102]:
-                raise ValueError("Missing, duplicate, or invented issue number.")
+                raise ValueError(
+                    "Missing, duplicate, or invented issue number."
+                )
             if numbers != [101, 102]:
                 raise ValueError("Issue 101 was not ranked above issue 102.")
-            output = json.dumps({
-                "issues": [
-                    {
-                        "Issue number": item.issue_number,
-                        "Category": item.category,
-                        "Urgency": item.urgency,
-                        "Summary": item.summary,
-                        "Rationale": item.rationale,
-                        "Recommended next action": item.next_action,
-                    }
-                    for item in validated
-                ],
-                "Number of LLM calls": calls,
-                "Runtime in seconds": round(time.perf_counter() - started, 3),
-            }, indent=2)
+            output = json.dumps(
+                {
+                    "issues": [
+                        {
+                            "Issue number": item.issue_number,
+                            "Category": item.category,
+                            "Urgency": item.urgency,
+                            "Summary": item.summary,
+                            "Rationale": item.rationale,
+                            "Recommended next action": item.next_action,
+                        }
+                        for item in validated
+                    ],
+                    "Number of LLM calls": calls,
+                    "Runtime in seconds": round(
+                        time.perf_counter() - started, 3
+                    ),
+                },
+                indent=2,
+            )
             secrets = [
-                value for name, value in os.environ.items()
-                if value and any(part in name.upper() for part in (
-                    "API_KEY", "TOKEN", "SECRET", "PASSWORD", "ACCESS_KEY"
-                ))
+                value
+                for name, value in os.environ.items()
+                if value
+                and any(
+                    part in name.upper()
+                    for part in (
+                        "API_KEY",
+                        "TOKEN",
+                        "SECRET",
+                        "PASSWORD",
+                        "ACCESS_KEY",
+                    )
+                )
             ]
             # Check decoded values as well as serialized output for escaping.
-            text = output + "\n" + "\n".join(
-                item.summary + "\n" + item.rationale + "\n" + item.next_action
-                for item in validated
+            text = (
+                output
+                + "\n"
+                + "\n".join(
+                    item.summary
+                    + "\n"
+                    + item.rationale
+                    + "\n"
+                    + item.next_action
+                    for item in validated
+                )
             )
             if any(secret in text for secret in secrets):
                 raise ValueError("Credential-like environment value in output.")
@@ -133,15 +169,25 @@ def main() -> int:
         # Do not expose exception messages, SDK logs, or unvalidated output.
         category = getattr(error, "category", "unknown")
         if category in {
-            "authentication", "model_not_found", "unsupported_response_format",
-            "rate_limit", "connectivity", "unknown",
+            "authentication",
+            "model_not_found",
+            "unsupported_response_format",
+            "rate_limit",
+            "connectivity",
+            "unknown",
         }:
             diagnostics["error_category"] = category
         print(json.dumps(diagnostics))
-        print(json.dumps({
-            "Number of LLM calls": calls,
-            "Runtime in seconds": round(time.perf_counter() - started, 3),
-        }))
+        print(
+            json.dumps(
+                {
+                    "Number of LLM calls": calls,
+                    "Runtime in seconds": round(
+                        time.perf_counter() - started, 3
+                    ),
+                }
+            )
+        )
         return 1
     finally:
         logging.disable(previous_logging_level)

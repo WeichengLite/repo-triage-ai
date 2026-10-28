@@ -84,3 +84,20 @@ These are model classifications, not independently verified severity labels.
 No features were added. Remaining limitations are semantic model errors, body
 truncation, activity-based sampling, and the lack of independent severity ground
 truth. No prompt changes were made to hide weaknesses found in this single run.
+
+## Subsequent installation and style checks
+
+The later quality pass formatted Python files, recorded Ruff's 80-character,
+Python 3.10, and Google-docstring settings, and added a second mocked provider
+case to the installed CLI test. The suite now reports **84 passed, 1 skipped**.
+Both OpenAI and Anthropic model selection exercise the same application path;
+this does not establish live Anthropic access or model quality.
+
+A separate checkout containing only tracked files was installed into a fresh
+Python 3.11 virtual environment, without the local `.env` or provider credentials.
+`pip install -e '.[dev]'`, `pip check`, package imports, console-script help,
+and tests passed. Python 3.10 grammar checks passed, but no Python 3.10 runtime
+was available. Ruff correctness/import/docstring checks and formatting passed.
+Production ASTs match the previous commit after excluding reordered imports;
+application logic and prompt text were preserved. No further live LLM call was
+needed for these formatting and test changes.

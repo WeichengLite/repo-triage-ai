@@ -8,3 +8,8 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Local generated output and OS metadata.
+.DS_Store
+/MONDAY_DIGEST.md
+/reports/

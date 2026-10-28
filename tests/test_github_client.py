@@ -1,18 +1,26 @@
 """Unit tests for bounded, credential-safe GitHub fetching."""
 
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import pytest
 import requests
 
-from repo_triage.github_client import GitHubClient, GitHubError, validate_repository
+from repo_triage.github_client import (
+    GitHubClient,
+    GitHubError,
+    validate_repository,
+)
 
 
-def make_issue(number: int = 1) -> dict:
+def make_issue(number: int = 1) -> dict[str, object]:
     """Build an API issue fixture."""
     return {
-        "number": number, "title": "An issue", "body": "x" * 900,
-        "labels": [{"name": "bug"}], "comments": 3,
+        "number": number,
+        "title": "An issue",
+        "body": "x" * 900,
+        "labels": [{"name": "bug"}],
+        "comments": 3,
         "updated_at": "2026-10-28T10:00:00Z",
         "html_url": f"https://github.com/owner/repo/issues/{number}",
     }
@@ -23,15 +31,32 @@ def response(rows: object, status: int = 200) -> Mock:
     return Mock(status_code=status, json=Mock(return_value=rows))
 
 
-@pytest.mark.parametrize("repository", ["", "owner", "a/b/c", "https://github.com/a/b", "a/..", "-a/b", "a/b?x", "a--b/c"])
+@pytest.mark.parametrize(
+    "repository",
+    [
+        "",
+        "owner",
+        "a/b/c",
+        "https://github.com/a/b",
+        "a/..",
+        "-a/b",
+        "a/b?x",
+        "a--b/c",
+    ],
+)
 def test_invalid_repository(repository: str) -> None:
     with pytest.raises(ValueError):
         validate_repository(repository)
 
 
-@pytest.mark.parametrize("repository", [
-    "pallets/flask", "python/cpython", "owner-name/repo_name.v2",
-])
+@pytest.mark.parametrize(
+    "repository",
+    [
+        "pallets/flask",
+        "python/cpython",
+        "owner-name/repo_name.v2",
+    ],
+)
 def test_valid_repository(repository: str) -> None:
     """Accept valid identifiers without changing their case or spelling."""
     assert validate_repository(repository) == repository
@@ -47,7 +72,9 @@ def test_invalid_limit(limit: object) -> None:
 
 def test_default_limit_excludes_pull_requests_and_extracts_fields() -> None:
     rows = [{"pull_request": {}}] + [make_issue(i) for i in range(1, 21)]
-    with patch("repo_triage.github_client.requests.get", return_value=response(rows)) as get:
+    with patch(
+        "repo_triage.github_client.requests.get", return_value=response(rows)
+    ) as get:
         issues = GitHubClient().fetch_open_issues("owner/repo")
     assert len(issues) == 15
     assert issues[0].number == 1
@@ -59,8 +86,11 @@ def test_default_limit_excludes_pull_requests_and_extracts_fields() -> None:
     assert str(issues[0].html_url).endswith("/issues/1")
     assert get.call_args.kwargs["timeout"] == 10
     assert get.call_args.kwargs["params"] == {
-        "state": "open", "sort": "updated", "direction": "desc",
-        "per_page": 100, "page": 1,
+        "state": "open",
+        "sort": "updated",
+        "direction": "desc",
+        "per_page": 100,
+        "page": 1,
     }
     assert "Authorization" not in get.call_args.kwargs["headers"]
 
@@ -68,8 +98,13 @@ def test_default_limit_excludes_pull_requests_and_extracts_fields() -> None:
 def test_second_page_counts_actual_issues_and_deduplicates() -> None:
     first = [{"pull_request": {}} for _ in range(99)] + [make_issue(1)]
     second = [make_issue(i) for i in range(1, 40)]
-    with patch("repo_triage.github_client.requests.get", side_effect=[response(first), response(second)]) as get:
-        issues = GitHubClient(token="secret").fetch_open_issues("owner/repo", 30)
+    with patch(
+        "repo_triage.github_client.requests.get",
+        side_effect=[response(first), response(second)],
+    ) as get:
+        issues = GitHubClient(token="secret").fetch_open_issues(
+            "owner/repo", 30
+        )
     assert [issue.number for issue in issues] == list(range(1, 31))
     assert get.call_count == 2
     assert get.call_args.kwargs["params"]["page"] == 2
@@ -77,7 +112,10 @@ def test_second_page_counts_actual_issues_and_deduplicates() -> None:
 
 
 def test_two_page_budget() -> None:
-    with patch("repo_triage.github_client.requests.get", return_value=response([{"pull_request": {}}] * 100)) as get:
+    with patch(
+        "repo_triage.github_client.requests.get",
+        return_value=response([{"pull_request": {}}] * 100),
+    ) as get:
         assert GitHubClient().fetch_open_issues("owner/repo") == []
     assert get.call_count == 2
 
@@ -85,22 +123,31 @@ def test_two_page_budget() -> None:
 def test_null_body_and_empty_repository() -> None:
     row = make_issue()
     row["body"] = None
-    with patch("repo_triage.github_client.requests.get", return_value=response([row])):
+    with patch(
+        "repo_triage.github_client.requests.get", return_value=response([row])
+    ):
         assert GitHubClient().fetch_open_issues("owner/repo")[0].body == ""
-    with patch("repo_triage.github_client.requests.get", return_value=response([])) as get:
+    with patch(
+        "repo_triage.github_client.requests.get", return_value=response([])
+    ) as get:
         assert GitHubClient().fetch_open_issues("owner/repo") == []
     get.assert_called_once()
 
 
 @pytest.mark.parametrize("status", [403, 404, 429, 500, 401, 301])
 def test_http_errors_do_not_expose_response(status: int) -> None:
-    with patch("repo_triage.github_client.requests.get", return_value=response("secret", status)):
+    with patch(
+        "repo_triage.github_client.requests.get",
+        return_value=response("secret", status),
+    ):
         with pytest.raises(GitHubError) as caught:
             GitHubClient(token="secret").fetch_open_issues("owner/repo")
     assert "secret" not in str(caught.value)
 
 
-@pytest.mark.parametrize("error", [requests.Timeout("secret"), requests.ConnectionError("secret")])
+@pytest.mark.parametrize(
+    "error", [requests.Timeout("secret"), requests.ConnectionError("secret")]
+)
 def test_network_errors_are_safe(error: requests.RequestException) -> None:
     with patch("repo_triage.github_client.requests.get", side_effect=error):
         with pytest.raises(GitHubError) as caught:
@@ -109,9 +156,13 @@ def test_network_errors_are_safe(error: requests.RequestException) -> None:
     assert caught.value.__suppress_context__
 
 
-@pytest.mark.parametrize("data", [{}, [None], [{}], [{**make_issue(), "labels": None}]])
+@pytest.mark.parametrize(
+    "data", [{}, [None], [{}], [{**make_issue(), "labels": None}]]
+)
 def test_malformed_data(data: object) -> None:
-    with patch("repo_triage.github_client.requests.get", return_value=response(data)):
+    with patch(
+        "repo_triage.github_client.requests.get", return_value=response(data)
+    ):
         with pytest.raises(GitHubError):
             GitHubClient().fetch_open_issues("owner/repo")
 
@@ -121,4 +172,79 @@ def test_invalid_json() -> None:
     result.json.side_effect = ValueError("secret")
     with patch("repo_triage.github_client.requests.get", return_value=result):
         with pytest.raises(GitHubError, match="invalid JSON"):
+            GitHubClient().fetch_open_issues("owner/repo")
+
+
+def test_since_filters_before_limit_and_normalizes_utc() -> None:
+    cutoff = datetime.fromisoformat("2026-10-21T12:00:00+02:00")
+    rows = [
+        make_issue(1) | {"updated_at": "2026-10-20T10:00:00Z"},
+        make_issue(2) | {"updated_at": "2026-10-21T10:00:00Z"},
+        make_issue(3) | {"updated_at": "2026-10-21T13:00:00+02:00"},
+    ]
+    client = GitHubClient()
+    with patch("requests.get", return_value=response(rows)) as get:
+        issues = client.fetch_open_issues("owner/repo", limit=1, since=cutoff)
+    assert [issue.number for issue in issues] == [3]
+    assert issues[0].updated_at == datetime(
+        2026, 10, 21, 11, tzinfo=timezone.utc
+    )
+    assert issues[0].updated_at.tzinfo == timezone.utc
+    assert get.call_args.kwargs["params"]["since"] == "2026-10-21T10:00:00Z"
+    assert client.limit_reason == "issue_limit"
+
+
+def test_since_continues_to_second_page_before_applying_limit() -> None:
+    cutoff = datetime(2026, 10, 21, tzinfo=timezone.utc)
+    first = [{"pull_request": {}}] * 99 + [
+        make_issue(1) | {"updated_at": "2026-10-20T00:00:00Z"}
+    ]
+    client = GitHubClient()
+    with patch(
+        "requests.get",
+        side_effect=[response(first), response([make_issue(2), make_issue(3)])],
+    ) as get:
+        issues = client.fetch_open_issues("owner/repo", limit=2, since=cutoff)
+    assert [issue.number for issue in issues] == [2, 3]
+    assert get.call_count == 2
+    assert all(
+        call.kwargs["params"]["since"] == "2026-10-21T00:00:00Z"
+        for call in get.call_args_list
+    )
+
+
+def test_since_empty_results_remain_bounded_and_metadata_resets() -> None:
+    client = GitHubClient()
+    cutoff = datetime(2026, 10, 29, tzinfo=timezone.utc)
+    rows = [make_issue(number) for number in range(1, 101)]
+    with patch("requests.get", return_value=response(rows)) as get:
+        assert client.fetch_open_issues("owner/repo", since=cutoff) == []
+    assert get.call_count == 2
+    assert client.limit_reason == "page_limit"
+    with patch("requests.get", return_value=response([])):
+        assert client.fetch_open_issues("owner/repo", since=cutoff) == []
+    assert client.limit_reason is None
+
+
+def test_omitting_since_retains_older_issues_and_original_query() -> None:
+    old = make_issue(1) | {"updated_at": "2010-01-01T00:00:00Z"}
+    with patch("requests.get", return_value=response([old])) as get:
+        issues = GitHubClient().fetch_open_issues("owner/repo")
+    assert [issue.number for issue in issues] == [1]
+    assert "since" not in get.call_args.kwargs["params"]
+
+
+def test_naive_since_rejected_before_request() -> None:
+    with patch("requests.get") as get:
+        with pytest.raises(ValueError, match="timezone"):
+            GitHubClient().fetch_open_issues(
+                "owner/repo", since=datetime(2026, 10, 21)
+            )
+    get.assert_not_called()
+
+
+def test_naive_github_timestamp_rejected() -> None:
+    row = make_issue() | {"updated_at": "2026-10-28T10:00:00"}
+    with patch("requests.get", return_value=response([row])):
+        with pytest.raises(GitHubError, match="timezone"):
             GitHubClient().fetch_open_issues("owner/repo")

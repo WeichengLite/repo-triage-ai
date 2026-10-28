@@ -10,8 +10,10 @@
   directed the staged implementation, requested live checks and security review,
   and configured provider credentials locally. No additional human architectural
   overrides are claimed.
-- **Verification performed:** The final test check reported 83 passed and one
-  optional live test skipped. Separate real GitHub/LLM runs succeeded, including
+- **Verification performed:** The latest test check reported 119 passed and one
+  optional live test skipped. A fresh Python 3.11 installation, imports, CLI help,
+  and tests were checked without copied credentials; Ruff checks also passed.
+  Separate real GitHub/LLM runs succeeded, including
   a 10-issue CPython run with one completion. Its report was compared with the
   captured validated results; all ten source issues were reviewed against the
   newest-first baseline. Secret scans and mocked error/injection tests were run.

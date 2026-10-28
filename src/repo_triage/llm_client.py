@@ -105,15 +105,16 @@ class LiteLLMProvider:
             TriageError: On budget, provider, refusal, or truncation failures.
         """
         try:
-            supported = litellm.get_supported_openai_params(
-                model=self.model
-            ) or []
+            supported = (
+                litellm.get_supported_openai_params(model=self.model) or []
+            )
             options: dict[str, Any] = {}
             if litellm.supports_response_schema(model=self.model):
                 options["response_format"] = {
                     "type": "json_schema",
                     "json_schema": {
-                        "name": "issue_triage", "strict": True,
+                        "name": "issue_triage",
+                        "strict": True,
                         "schema": schema,
                     },
                 }
@@ -128,17 +129,22 @@ class LiteLLMProvider:
                     "Model does not advertise a supported output-token limit."
                 )
             # Count schema overhead as well as messages, with a safety margin.
-            input_tokens = litellm.token_counter(
-                model=self.model, messages=messages
-            ) + litellm.token_counter(
-                model=self.model,
-                text=json.dumps(options.get("response_format", {})),
-            ) + 256
+            input_tokens = (
+                litellm.token_counter(model=self.model, messages=messages)
+                + litellm.token_counter(
+                    model=self.model,
+                    text=json.dumps(options.get("response_format", {})),
+                )
+                + 256
+            )
             if input_tokens > MAX_INPUT_TOKENS:
                 raise TriageError("Triage input exceeds the token budget.")
             response = litellm.completion(
-                model=self.model, messages=messages,
-                timeout=LLM_TIMEOUT_SECONDS, num_retries=0, max_retries=0,
+                model=self.model,
+                messages=messages,
+                timeout=LLM_TIMEOUT_SECONDS,
+                num_retries=0,
+                max_retries=0,
                 **options,
             )
             choice = response.choices[0]
@@ -186,11 +192,16 @@ class TriageClient:
         schema = _response_schema()
         messages = [
             {"role": "system", "content": _SYSTEM_PROMPT + json.dumps(schema)},
-            {"role": "user", "content": json.dumps({
-                "untrusted_issues": [
-                    issue.model_dump(mode="json") for issue in issues
-                ]
-            })},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "untrusted_issues": [
+                            issue.model_dump(mode="json") for issue in issues
+                        ]
+                    }
+                ),
+            },
         ]
         for attempt in range(2):
             raw = self._provider.complete(messages, schema)
@@ -206,12 +217,17 @@ class TriageClient:
                         "Model returned invalid triage after two attempts."
                     ) from None
                 # Do not replay untrusted model output or validation details.
-                messages.append({
-                    "role": "system",
-                    "content": "The response failed validation. Return valid "
-                    "JSON matching the schema and length limits, with exactly "
-                    "one result for each supplied issue number.",
-                })
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "The response failed validation. Return valid JSON "
+                            "matching the schema and length limits, "
+                            "with exactly one result for each "
+                            "supplied issue number."
+                        ),
+                    }
+                )
         raise AssertionError("Unreachable triage state.")
 
 
@@ -238,8 +254,10 @@ def rank_triage(
             label.strip().lower() in priority for label in source.labels
         )
         return (
-            urgency[result.urgency], -int(has_priority),
-            -source.comment_count, result.issue_number,
+            urgency[result.urgency],
+            -int(has_priority),
+            -source.comment_count,
+            result.issue_number,
         )
 
     return sorted(results, key=sort_key)
