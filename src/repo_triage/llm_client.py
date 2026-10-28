@@ -39,6 +39,30 @@ Return ONLY a JSON object matching this schema, with no markdown:
 class TriageError(Exception):
     """A safe provider or validation failure, without fabricated results."""
 
+    def __init__(self, message: str, *, category: str = "unknown") -> None:
+        """Store a sanitized category without exposing provider messages."""
+        super().__init__(message)
+        self.category = category
+
+
+def _error_category(error: Exception) -> str:
+    """Classify SDK errors without returning their messages or metadata."""
+    if isinstance(error, litellm.AuthenticationError):
+        return "authentication"
+    if isinstance(error, litellm.NotFoundError):
+        return "model_not_found"
+    if isinstance(error, litellm.RateLimitError):
+        return "rate_limit"
+    if isinstance(error, (litellm.APIConnectionError, litellm.Timeout)):
+        return "connectivity"
+    if isinstance(error, litellm.BadRequestError):
+        # Inspect in memory only; never print or retain the original message.
+        text = str(error).lower()
+        if any(name in text for name in ("response_format", "json_schema")):
+            if any(term in text for term in ("unsupported", "not support")):
+                return "unsupported_response_format"
+    return "unknown"
+
 
 class _TriageBatch(BaseModel):
     """The JSON envelope required from the model."""
@@ -123,10 +147,11 @@ class LiteLLMProvider:
             return choice.message.content
         except TriageError:
             raise
-        except Exception:
+        except Exception as error:
             # Provider errors may include credentials, request data, or URLs.
             raise TriageError(
-                "LLM request failed; check model, credentials, and connection."
+                "LLM request failed; check model, credentials, and connection.",
+                category=_error_category(error),
             ) from None
 
 

@@ -184,6 +184,32 @@ def test_model_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     assert LiteLLMProvider("explicit/model").model == "explicit/model"
 
 
+@pytest.mark.parametrize("error_class,category,message", [
+    ("AuthenticationError", "authentication", "credential-secret"),
+    ("NotFoundError", "model_not_found", "credential-secret"),
+    ("RateLimitError", "rate_limit", "credential-secret"),
+    ("APIConnectionError", "connectivity", "credential-secret"),
+    ("Timeout", "connectivity", "credential-secret"),
+    ("UnsupportedParamsError", "unsupported_response_format",
+     "response_format is not supported: credential-secret"),
+    ("BadRequestError", "unknown", "credential-secret"),
+])
+def test_safe_provider_error_categories(
+    error_class: str, category: str, message: str
+) -> None:
+    """Preserve useful categories while suppressing sensitive SDK messages."""
+    import litellm
+
+    error = getattr(litellm, error_class)(
+        message=message, model="test", llm_provider="openai"
+    )
+    with patch("litellm.get_supported_openai_params", side_effect=error):
+        with pytest.raises(TriageError) as caught:
+            LiteLLMProvider().complete([], _response_schema())
+    assert caught.value.category == category
+    assert "credential-secret" not in str(caught.value)
+
+
 def test_default_model_advertises_required_capabilities() -> None:
     """Check installed LiteLLM metadata, without claiming live behavior."""
     import litellm
