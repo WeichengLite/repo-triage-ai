@@ -1,21 +1,12 @@
-# AI assistance log
+# AI Collaboration Log
 
-- **Codex assistance:** Codex implemented the package, GitHub and LiteLLM clients,
-  CLI, reporting, tests, and these documents through iterative user requests.
-  It also debugged `.env` loading, added safe error handling and retry bounds,
-  and executed local tests and live verification commands.
-- **Human decisions:** The human specified the six-module architecture,
-  dependencies, bounded single-batch triage, deterministic Python ranking,
-  and exclusions such as agent frameworks and automatic GitHub writes. They
-  directed the staged implementation, requested live checks and security review,
-  and configured provider credentials locally. No additional human architectural
-  overrides are claimed.
-- **Verification performed:** The latest test check reported 119 passed and one
-  optional live test skipped. A fresh Python 3.11 installation, imports, CLI help,
-  and tests were checked without copied credentials; Ruff checks also passed.
-  Separate real GitHub/LLM runs succeeded, including
-  a 10-issue CPython run with one completion. Its report was compared with the
-  captured validated results; all ten source issues were reviewed against the
-  newest-first baseline. Secret scans and mocked error/injection tests were run.
-  Semantic errors were documented; no benchmark accuracy or manipulation
-  resistance was established.
+- **Where AI helped:** I used ChatGPT to brainstorm, challenge my ideas, and plan
+  the project. Codex helped me implement the code, debug issues, and build tests,
+  allowing me to focus more on product thinking.
+- **Where I made decisions:** I focused on what users, developers, and regulators
+  really want and dread. I also identified improvements such as time-window
+  reporting and date-stamped exports.
+- **What I double-checked:** I ran tests, verified real API integration, and
+  reviewed generated reports. I learned that passing tests is not the same as
+  delivering a useful product. AI accelerated my work, but I remained responsible
+  for decisions and results.

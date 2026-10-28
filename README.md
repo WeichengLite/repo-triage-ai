@@ -80,7 +80,7 @@ A model suggestion, not a verified fix.
 
 GitHub issues → LLM analysis → validated priorities → report.
 
-Python validates issue numbers and ranks by suggested urgency, priority labels, comments, then issue number. Counts generate the summary without another model call. See [design rationale](docs/THOUGHT_PROCESS.md) and [AI assistance disclosure](docs/AI_LOG.md).
+Python validates issue numbers and ranks by suggested urgency, priority labels, comments, then issue number. Counts generate the summary without another model call.
 
 ## Design Choices & Limitations
 
@@ -88,3 +88,8 @@ Python validates issue numbers and ranks by suggested urgency, priority labels, 
 - **Bounded work:** at most 15 analyzed issues, two GitHub pages, and 800 body characters per issue. One batch, with at most one invalid-output repair attempt. Token limits and request timeouts apply; cost varies by model.
 - **Partial coverage:** sampling can miss older urgent issues. Requested cutoffs and observed timestamp ranges do not guarantee full coverage. No matches produce an empty report without an LLM call.
 - **Human judgment required:** validation checks structure, not truth. The audit found incorrect summaries and debatable priorities. Suggestions are not authoritative severity determinations; tests do not establish immunity to prompt injection.
+
+## Behind the Project
+
+- [Design Thinking & Trade-offs](docs/THOUGHT_PROCESS.md)
+- [AI Collaboration Log](docs/AI_LOG.md)

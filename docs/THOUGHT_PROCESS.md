@@ -1,28 +1,41 @@
-# Thought process
+# How I Thought About This Project
 
-Maintainers need to decide what to investigate next, not just read recent
-updates. A short briefing should connect a reported problem to its possible
-impact and one concrete action, leaving severity decisions with the maintainer.
+## Understanding the assignment
 
-Python owns bounded retrieval, schema validation, issue-number checks, and
-stable ranking. The LLM interprets content and labels to distinguish crashes,
-bugs, enhancements, documentation, and questions. This separates semantic
-judgment from repeatable mechanics. A count-based executive summary avoids
-another call; structural validation still cannot establish factual truth.
+I read the instructions several times before coding. I wanted to understand
+the problem, constraints, and expected deliverables before deciding what to build.
 
-One batch fits the take-home scope. Multi-agent loops complicate latency, cost,
-and debugging. RAG adds little without curated project context; a dashboard
-adds presentation work without testing prioritization quality. Automatic GitHub
-writes would turn uncertain suggestions into repository actions. Terminal and
-Markdown output leave review and action with humans.
+## Thinking about stakeholders: my six design rules
 
-Recent sampling and the 800-character body cap control input size and cost,
-but can miss old urgent issues, reproduction details, and discussion. The live
-audit showed ordering changes alongside an incorrect summary and understated
-test impact; it did not establish superiority to newest-first.
+I considered three perspectives, asking what each wants most and dreads most:
 
-With more time, I would first collect maintainer judgments on priority pairs,
-factual summaries, and proposed actions. I would measure top-five usefulness
-and missed urgent reports against newest-first, then tune the prompt, sampling,
-and context budget. Larger samples and repeated model runs should follow that
-evaluation, rather than adding orchestration first.
+- **Customer — GitHub maintainer:** wants clear, actionable priorities with
+  minimal noise. Dreads hallucinated urgency and long, unhelpful summaries.
+- **Product builder — engineering/platform team:** wants predictable costs,
+  bounded execution, and flexible LLM providers. Dreads runaway agent loops,
+  unnecessary complexity, and provider lock-in.
+- **Regulator — security/governance:** wants read-only behavior, secret hygiene,
+  and transparent recommendations. Dreads credential leaks, unintended actions,
+  and unverified automated decisions.
+
+These principles shaped the architecture: bounded GitHub retrieval, a small
+LLM triage step, validation, and deterministic ranking in Python. Provider choice
+is configurable. Reports include source links and sampling limits, and leave
+the final decision with the maintainer. These are design choices, not guarantees
+that the AI will always get the priorities right.
+
+## Scoping under time constraints
+
+I prioritized a working, useful assistant while leaving time for debugging,
+testing, a live demo, and improvements. I deliberately avoided complex agent
+frameworks, dashboards, and automatic GitHub writes. Time-window reporting and
+date-stamped exports made the reports easier to interpret and keep track of.
+
+## Reflection and future improvement
+
+With more time, I would evaluate prioritization against real maintainer feedback:
+are the suggested priorities useful, and do the next actions help? Passing tests
+and changing the order of issues do not answer those questions.
+
+I am also interested in how similar decision-support workflows could apply to
+TechBio and pharmaceutical R&D, with domain-specific evaluation and human review.
